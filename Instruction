@@ -1,0 +1,98 @@
+3. Architecture
+Student / Parent / Staff browser
+              │
+              ▼
+     Next.js app and API routes
+       │        │          │
+       ▼        ▼          ▼
+ Supabase    Supabase    AI provider
+ Auth + DB   Storage     (server only)
+       │
+       └── Row Level Security policies
+The browser should never receive service-role credentials or AI provider secrets. Enforce access rules in the database as well as in the UI. Route AI requests through the server, retrieve only resources the student is allowed to access, and include source titles or page references when available.
+For the first version, resource search can be simple: staff-uploaded text excerpts or manually prepared notes linked to resources. Add automated PDF text extraction and semantic search only if the basic flow is working early enough.
+4. Data model
+Use UUID primary keys and timestamps. Keep student learning records separate from account profiles.
+Table	Main fields
+profiles	id (Auth user ID), full_name, role, preferred_language, created_at
+student_profiles	user_id, grade, school_name (optional)
+parent_student_links	parent_user_id, student_user_id, status, created_at
+subjects	id, grade, name, description, sort_order, published
+chapters	id, subject_id, title, sort_order, published
+topics	id, chapter_id, title, sort_order, published
+resources	id, topic_id (nullable), chapter_id, title, storage_path, mime_type, uploaded_by, published
+topic_progress	student_user_id, topic_id, status, completed_at, updated_at
+quizzes	id, topic_id, title, published, created_by
+quiz_questions	id, quiz_id, prompt, options (JSON), correct_answer, explanation, sort_order
+quiz_attempts	id, quiz_id, student_user_id, score, started_at, submitted_at
+quiz_responses	attempt_id, question_id, answer, is_correct
+tutor_sessions	id, student_user_id, tutor_user_id, starts_at, meeting_url, notes
+scholarship_items	id, title, description, eligibility, deadline, url, published
+tutor_conversations	id, student_user_id, created_at
+tutor_messages	id, conversation_id, sender_role, content, source_refs, created_at
+
+
+Do not store unnecessary personal details. For quiz questions, avoid exposing the correct answer to students before submission; enforce that in server queries rather than relying on hidden UI fields.
+5. Roles and access
+Use Supabase Auth for sign-in, and a profiles.role field for the initial roles: student, parent, tutor, and admin.
+- Student: Read published learning content; edit only their own progress, quiz attempts, and conversations.
+- Parent: Read progress only for students with an active parent_student_links record. Parents cannot edit student progress.
+- Tutor: Read assigned students and manage tutoring-session details. For the MVP, keep student assignment explicit.
+- Admin: Manage curriculum, resources, quizzes, users, and scholarship entries.
+Implement database Row Level Security policies for every table. Treat the role shown in the browser as display information, not authorization. Admin role changes and parent–student links should be performed through a trusted server action or a restricted admin workflow.
+For students under 18, make parent linking explicit and collect the minimum information needed. Before inviting real students, decide who handles consent, account recovery, data retention, and requests to delete or correct data.
+6. Suggested folder structure
+app/
+  (auth)/
+    login/
+    signup/
+  student/
+    dashboard/
+    subjects/[subjectId]/
+    chapters/[chapterId]/
+    tutor/
+    scholarships/
+  parent/
+    dashboard/
+  staff/
+    dashboard/
+    curriculum/
+    resources/
+    quizzes/
+    sessions/
+  api/
+    tutor/
+components/
+  navigation/
+  learning/
+  quizzes/
+  progress/
+  forms/
+lib/
+  supabase/
+  auth/
+  validation/
+  ai/
+  i18n/
+types/
+  database.ts
+supabase/
+  migrations/
+  seed.sql
+Keep route groups simple. Don’t build a highly generic component system before the main student journey works.
+7. Day-by-day roadmap
+Day	Outcome
+1	Create the app, repository, environment setup, and initial UI shell. Agree on the pilot grade, subjects, and sample content.
+2	Create Supabase project, schema, migrations, Auth setup, and roles.
+3	Add Row Level Security policies; create student, parent, tutor, and admin route guards.
+4	Build login and student dashboard with grade and subject navigation.
+5	Build subject → chapter → topic pages and progress updates.
+6	Add secure resource upload and download for staff and students.
+7	Build quiz creation for staff and quiz-taking/scoring for students.
+8	Add parent–student linking and a read-only parent dashboard.
+9	Add scholarship listings and guidance articles managed by staff.
+10	Build AI tutor chat UI and server endpoint with strict access checks.
+11	Ground AI answers in a small set of curated resource excerpts; include source labels and a “contact a tutor” path.
+12	Add tutor session scheduling fields and external meeting links; refine mobile layout and language switching.
+13	Walk through complete student, parent, and staff journeys; fix access, content, and usability issues.
+14	Deploy, load pilot content, create staff accounts, and prepare a short pilot guide.
